@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "manager",
+    "slug": "snack-aba3c955-e443-4ca4-be51-7fdacfb3b9d0",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.aishwaray_tiwary.snackaba3c955e4434ca4be517fdacfb3b9d0"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "cf4a9a4b-82af-4781-9cce-7aac0c030e8d"
+      }
+    }
+  }
+}
