@@ -1,8 +1,8 @@
 import { View, Text, StyleSheet } from "react-native";
 
-export default function HomePage() {
+export default function MoneyPage() {
   return <View style={ styles.root }>
-    <Text>This is the HomePage</Text>
+    <Text>This is the MoneyPage</Text>
   </View>
 }
 
