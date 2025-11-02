@@ -1,4 +1,12 @@
 import { View, Text, StyleSheet } from "react-native";
+import { useState } from "react";
+
+
+const TaskCard = ({task, isdone}) => {
+  return <View>
+    <Text>{task}</Text>  
+  </View>
+}
 
 export default function LearnPage() {
   return <View style={ styles.root }>

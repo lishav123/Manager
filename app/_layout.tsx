@@ -7,8 +7,15 @@ export default function RootLayout() {
       screenOptions={{
         headerShown: false,
         // You can set a global active/inactive tint color here if you like
-        // tabBarActiveTintColor: 'blue',
-        // tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: '#79def7',
+        tabBarInactiveTintColor: 'white',
+        tabBarStyle: {
+          backgroundColor: 'teal',
+          paddingTop: 10,
+          height: 120,
+          borderTopLeftRadius: 15,
+          borderTopRightRadius: 15,
+        },
       }}
     >
       <Tabs.Screen
