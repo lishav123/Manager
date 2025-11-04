@@ -61,16 +61,16 @@ const dummy_data = [
   },
 ]
 
-const TaskCard = ({ task, isdone }) => {
-  return <View>
-    <Text>{task}</Text>  
+const TaskCard = ({ idx, task, isdone }) => {
+  return <View style={{ backgroundColor: idx % 2 == 0 ? "#B2D8D8" : "#66B2B2", padding: 10}}>
+    <Text>{task} {idx}</Text>  
   </View>
 }
 
 const TabsSubSectionElements = ({ data }) => {
   return <FlatList 
     data={data}
-    renderItem={({ item }) => <TaskCard task={item.task} isdone={item.isdone} />}
+    renderItem={({ item }) => <TaskCard task={item.task} isdone={item.isdone} idx={data.indexOf(item)} />}
     keyExtractor={item => item.id}
   />
 }
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     margin: 10,
     borderRadius: 10,
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "space-between"
   },
 
   lightText: {
