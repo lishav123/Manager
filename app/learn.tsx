@@ -68,7 +68,7 @@ let dummy_data = [
 /**
  * Renders an individual task card with a button to toggle its completion state.
  */
-const TaskCard = ({ idx, task, isdone, setData }) => {
+const TaskCard = ({ idx, task, isdone, data, section_id, setData, whole_data }) => {
   return (
     <View
       style={[
@@ -93,7 +93,7 @@ const TaskCard = ({ idx, task, isdone, setData }) => {
         ]}
         onPress={() => {
           // Logic to toggle task status could be added here.
-          setData((prev) => [...prev]); // Currently just triggers re-render
+          setData((prev) => []); // Currently just triggers re-render
         }}
       >
         <Text style={styles.buttonText}>{isdone ? "Undone" : "Done"}</Text>
@@ -105,7 +105,7 @@ const TaskCard = ({ idx, task, isdone, setData }) => {
 /**
  * Displays a list of task cards within a section.
  */
-const TabsSubSectionElements = ({ data, setData }) => {
+const TabsSubSectionElements = ({ data, setData, whole_data, section_id }) => {
   return (
     <FlatList
       data={data}
@@ -115,6 +115,9 @@ const TabsSubSectionElements = ({ data, setData }) => {
           isdone={item.isdone}
           idx={data.indexOf(item)}
           setData={setData}
+          data={data}
+          section_id={section_id}
+          whole_data={whole_data}
         />
       )}
       keyExtractor={(item) => item.id.toString()}
@@ -200,7 +203,7 @@ const TabSection = ({ data, setData }) => {
 
           {/* Subtasks (Hidden if toggled off) */}
           {!item.hidden && (
-            <TabsSubSectionElements data={item.data} setData={setData} />
+            <TabsSubSectionElements data={item.data} setData={setData} whole_data={data} section_id={item.id}/>
           )}
         </View>
       )}
@@ -226,7 +229,7 @@ export default function LearnPage() {
 
   // Add new section dynamically
   const handleSection = () => {
-    const id = data[data.length - 1].id + 1;
+    const id = data.length == 0 ? 0 : data[data.length - 1].id + 1;
     const newSection = {
       id,
       name: `Section ${id}`,
