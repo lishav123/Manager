@@ -93,7 +93,20 @@ const TaskCard = ({ idx, task, isdone, data, section_id, setData, whole_data }) 
         ]}
         onPress={() => {
           // Logic to toggle task status could be added here.
-          setData((prev) => []); // Currently just triggers re-render
+          setData(d => d.map(item => {
+            if (item.id == section_id) {
+              return {id: item.id, name: item.name, data: item.data.map(i => {
+                if (idx == i.id) {
+                  i.isdone = !i.isdone
+                  return i
+                } else {
+                  return i
+                }
+              })}
+            } else {
+              return item
+            } 
+          })); 
         }}
       >
         <Text style={styles.buttonText}>{isdone ? "Undone" : "Done"}</Text>
