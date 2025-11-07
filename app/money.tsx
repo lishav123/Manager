@@ -121,7 +121,7 @@ export default function MoneyPage() {
       <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.headerBar}>
         <Text style={styles.headerTitle}>My Money</Text>
         <Pressable
-          style={[styles.pillBtn, styles.btnPrimary]}
+          style={[styles.pillBtn, styles.btnPrimary, { borderRadius: 999 }]}
           onPress={() => setModalVisible(true)}
         >
           <Ionicons name="add-circle" size={18} color="#fff" />
