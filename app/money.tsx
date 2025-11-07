@@ -1,489 +1,521 @@
-import React, { useState, useMemo, useEffect } from "react";
+/**
+ * ---------------------------------------------------------------------------
+ * MoneyPage — Expense, Income & Loan Tracker (with AsyncStorage)
+ * ---------------------------------------------------------------------------
+ *
+ * PURPOSE:
+ *   A personal finance tracker to record income, expenses, and loans.
+ *   Automatically calculates totals and shows a clear summary.
+ *
+ * DATA STRUCTURE IN ASYNCSTORAGE:
+ * ---------------------------------------------------------------------------
+ * {
+ *   skills: [],
+ *   money: [
+ *     { id, title, amount, category, type: "income" | "expense" | "loan", date }
+ *   ],
+ *   streak: [],
+ *   journal: []
+ * }
+ * ---------------------------------------------------------------------------
+ */
+
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
+  StyleSheet,
   FlatList,
   Pressable,
-  StyleSheet,
   Modal,
   TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { PieChart } from "react-native-gifted-charts";
 
-type Transaction = {
-  id: number;
-  title: string;
-  amount: number;
-  type: "income" | "expense" | "loan";
-  category: string;
-  date: string;
-};
-
-const CATEGORIES = ["food", "academics", "cloths", "travel", "others"];
-
-const nextId = (arr: Transaction[]) =>
-  arr.length ? Math.max(...arr.map((x) => x.id)) + 1 : 0;
+const CATEGORIES = ["food", "academics", "clothes", "travel", "others"];
+const STORAGE_KEY = "@myAppData";
 
 export default function MoneyPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [filter, setFilter] = useState<string>("all");
-  const [editTx, setEditTx] = useState<Transaction | null>(null);
+  const [filter, setFilter] = useState("all");
 
-  // ---- Derived financials
+  const [title, setTitle] = useState("");
+  const [amount, setAmount] = useState("");
+  const [category, setCategory] = useState("others");
+  const [type, setType] = useState("expense");
+  const [editId, setEditId] = useState(null);
+
+  /* -------------------------------------------------------------------------
+     Load & Save from AsyncStorage
+     ------------------------------------------------------------------------- */
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const existing = await AsyncStorage.getItem(STORAGE_KEY);
+        if (existing) {
+          const parsed = JSON.parse(existing);
+          const moneyData = parsed.money || [];
+          setTransactions(moneyData);
+        } else {
+          const initial = { skills: [], money: [], streak: [], journal: [] };
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+        }
+      } catch (err) {
+        console.error("Load error:", err);
+      }
+    };
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    const saveData = async () => {
+      try {
+        const existing = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsed = existing ? JSON.parse(existing) : {};
+        const updated = { ...parsed, money: transactions };
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.error("Save error:", err);
+      }
+    };
+    saveData();
+  }, [transactions]);
+
+  /* -------------------------------------------------------------------------
+     Derived Calculations
+     ------------------------------------------------------------------------- */
   const income = useMemo(
     () =>
       transactions
         .filter((t) => t.type === "income")
-        .reduce((a, t) => a + t.amount, 0),
+        .reduce((sum, t) => sum + t.amount, 0),
     [transactions]
   );
+
   const expense = useMemo(
     () =>
       transactions
         .filter((t) => t.type === "expense")
-        .reduce((a, t) => a + t.amount, 0),
+        .reduce((sum, t) => sum + t.amount, 0),
     [transactions]
   );
+
   const loan = useMemo(
     () =>
       transactions
         .filter((t) => t.type === "loan")
-        .reduce((a, t) => a + t.amount, 0),
+        .reduce((sum, t) => sum + t.amount, 0),
     [transactions]
   );
-  const balance = income - (expense + loan);
 
-  // ---- Category totals for chart (expenses only)
-  const categoryTotals = useMemo(() => {
-    const totals: Record<string, number> = {};
-    CATEGORIES.forEach((c) => (totals[c] = 0));
-    transactions
-      .filter((t) => t.type === "expense")
-      .forEach((t) => (totals[t.category] += t.amount));
-    return totals;
-  }, [transactions]);
+  const balance = income - expense - loan;
 
-  const chartData = Object.keys(categoryTotals)
-    .filter((cat) => categoryTotals[cat] > 0)
-    .map((cat) => ({
-      value: categoryTotals[cat],
-      color:
-        {
-          food: "#22c55e",
-          academics: "#6366f1",
-          cloths: "#f97316",
-          travel: "#06b6d4",
-          others: "#a855f7",
-        }[cat] || "#94a3b8",
-      text: cat,
-    }));
-
-  // ---- SAFETY: PieChart cannot handle empty arrays (reduce crash)
-  const SAFE_CHART_DATA =
-    chartData.length > 0 ? chartData : [{ value: 1, color: "#e2e8f0" }];
-  const noExpenseData = chartData.length === 0;
-
-  // ---- CRUD
-  const handleAddOrEdit = (tx: Omit<Transaction, "id" | "date">) => {
-    if (editTx) {
-      setTransactions((prev) =>
-        prev.map((t) => (t.id === editTx.id ? { ...editTx, ...tx } : t))
-      );
-    } else {
-      setTransactions((prev) => [
-        ...prev,
-        { ...tx, id: nextId(prev), date: new Date().toISOString() },
-      ]);
-    }
-    setModalVisible(false);
-    setEditTx(null);
-  };
-
-  const handleDelete = (id: number) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-  };
-
-  const filteredTx =
+  const filteredTransactions =
     filter === "all"
       ? transactions
       : transactions.filter((t) => t.category === filter);
 
+  /* -------------------------------------------------------------------------
+     CRUD Operations
+     ------------------------------------------------------------------------- */
+  const handleSave = () => {
+    const trimmedTitle = title.trim();
+    const numAmount = parseFloat(amount);
+    if (!trimmedTitle || isNaN(numAmount) || numAmount <= 0)
+      return Alert.alert("Invalid", "Please enter valid title and amount.");
+
+    if (editId) {
+      setTransactions((prev) =>
+        prev.map((t) =>
+          t.id === editId
+            ? { ...t, title: trimmedTitle, amount: numAmount, category, type }
+            : t
+        )
+      );
+    } else {
+      const newEntry = {
+        id: Date.now(),
+        title: trimmedTitle,
+        amount: numAmount,
+        category,
+        type,
+        date: new Date().toISOString(),
+      };
+      setTransactions((prev) => [newEntry, ...prev]);
+    }
+
+    setModalVisible(false);
+    setEditId(null);
+    setTitle("");
+    setAmount("");
+    setCategory("others");
+    setType("expense");
+  };
+
+  const handleEdit = (item) => {
+    setEditId(item.id);
+    setTitle(item.title);
+    setAmount(item.amount.toString());
+    setCategory(item.category);
+    setType(item.type);
+    setModalVisible(true);
+  };
+
+  const handleDelete = (id) => {
+    Alert.alert(
+      "Delete Transaction",
+      "Are you sure you want to delete this transaction?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes, Delete",
+          style: "destructive",
+          onPress: () =>
+            setTransactions((prev) => prev.filter((t) => t.id !== id)),
+        },
+      ]
+    );
+  };
+
+  /* -------------------------------------------------------------------------
+     Render Function
+     ------------------------------------------------------------------------- */
+  const renderTransaction = ({ item }) => (
+    <View style={styles.transactionCard}>
+      <View>
+        <Text style={styles.transactionTitle}>{item.title}</Text>
+        <Text style={styles.transactionMeta}>
+          {item.category} · {item.type}
+        </Text>
+      </View>
+
+      <View style={{ alignItems: "flex-end" }}>
+        <Text
+          style={[
+            styles.transactionAmount,
+            item.type === "income"
+              ? { color: "#16a34a" }
+              : item.type === "loan"
+              ? { color: "#ca8a04" }
+              : { color: "#dc2626" },
+          ]}
+        >
+          {item.type === "income" ? "+" : "-"}₹{item.amount}
+        </Text>
+
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 6 }}>
+          <Pressable onPress={() => handleEdit(item)}>
+            <Ionicons name="create-outline" size={18} color="#6366f1" />
+          </Pressable>
+          <Pressable onPress={() => handleDelete(item.id)}>
+            <Ionicons name="trash-outline" size={18} color="#ef4444" />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+
+  /* -------------------------------------------------------------------------
+     UI RENDER
+     ------------------------------------------------------------------------- */
   return (
     <SafeAreaView style={styles.root}>
       {/* Header */}
-      <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.headerBar}>
-        <Text style={styles.headerTitle}>My Money</Text>
+      <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.header}>
+        <Text style={styles.headerTitle}>Money Tracker</Text>
         <Pressable
-          style={[styles.pillBtn, styles.btnPrimary, { borderRadius: 999 }]}
+          style={[styles.pillBtn, styles.btnPrimary]}
           onPress={() => setModalVisible(true)}
         >
-          <Ionicons name="add-circle" size={18} color="#fff" />
+          <Ionicons name="add-circle-outline" size={18} color="#fff" />
           <Text style={styles.pillBtnText}>Add</Text>
         </Pressable>
       </LinearGradient>
 
-      {/* SUMMARY DASHBOARD (numeric view) */}
+      {/* Summary */}
       <View style={styles.summaryArea}>
-        {transactions.length === 0 ? (
-          <View style={styles.emptySummary}>
-            <Ionicons name="wallet-outline" size={28} color="#64748b" />
-            <Text style={styles.emptySummaryTitle}>No transactions yet</Text>
-            <Text style={styles.emptySummarySub}>
-              Add your first income or expense
+        <Text style={styles.balanceLabel}>Current Balance</Text>
+        <Text
+          style={[
+            styles.balanceValue,
+            balance > 0
+              ? { color: "#16a34a" }
+              : balance < 0
+              ? { color: "#dc2626" }
+              : { color: "#facc15" },
+          ]}
+        >
+          ₹{balance.toFixed(2)}
+        </Text>
+
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, { backgroundColor: "#dcfce7" }]}>
+            <Text style={styles.statLabel}>Income</Text>
+            <Text style={[styles.statValue, { color: "#16a34a" }]}>
+              ₹{income.toFixed(2)}
             </Text>
           </View>
-        ) : (
-          <View>
-            {/* Balance Display */}
-            <View style={styles.balanceCard}>
-              <Text style={styles.balanceLabel}>Current Balance</Text>
-              <Text
-                style={[
-                  styles.balanceValue,
-                  balance > 0
-                    ? { color: "#16a34a" }
-                    : balance < 0
-                    ? { color: "#dc2626" }
-                    : { color: "#facc15" },
-                ]}
-              >
-                ₹{balance.toFixed(2)}
-              </Text>
-            </View>
 
-            {/* Income / Expense / Loan Cards */}
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, { backgroundColor: "#dcfce7" }]}>
-                <Text style={styles.statLabel}>Income</Text>
-                <Text style={[styles.statValue, { color: "#16a34a" }]}>
-                  ₹{income.toFixed(2)}
-                </Text>
-              </View>
-
-              <View style={[styles.statCard, { backgroundColor: "#fee2e2" }]}>
-                <Text style={styles.statLabel}>Expense</Text>
-                <Text style={[styles.statValue, { color: "#dc2626" }]}>
-                  ₹{expense.toFixed(2)}
-                </Text>
-              </View>
-
-              <View style={[styles.statCard, { backgroundColor: "#fef9c3" }]}>
-                <Text style={styles.statLabel}>Loan</Text>
-                <Text style={[styles.statValue, { color: "#ca8a04" }]}>
-                  ₹{loan.toFixed(2)}
-                </Text>
-              </View>
-            </View>
+          <View style={[styles.statCard, { backgroundColor: "#fee2e2" }]}>
+            <Text style={styles.statLabel}>Expense</Text>
+            <Text style={[styles.statValue, { color: "#dc2626" }]}>
+              ₹{expense.toFixed(2)}
+            </Text>
           </View>
-        )}
+
+          <View style={[styles.statCard, { backgroundColor: "#fef9c3" }]}>
+            <Text style={styles.statLabel}>Loan</Text>
+            <Text style={[styles.statValue, { color: "#ca8a04" }]}>
+              ₹{loan.toFixed(2)}
+            </Text>
+          </View>
+        </View>
       </View>
 
-
-      {/* Category filter chips (compact) */}
-      <View style={styles.categoryContainer}>
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={["all", ...CATEGORIES]}
-        keyExtractor={(item) => item}
-        contentContainerStyle={{
-          gap: 8,
-          paddingHorizontal: 12,
+      {/* Category Filter — Fixed Height */}
+      <View
+        style={{
+          backgroundColor: "#fff",
+          borderRadius: 12,
+          marginHorizontal: 10,
+          paddingVertical: 6,
+          elevation: 1,
         }}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => setFilter(item)}
-            style={[
-              styles.categoryChip,
-              filter === item && styles.categoryChipActive,
-            ]}
-          >
-            <Text
+      >
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={["all", ...CATEGORIES]}
+          keyExtractor={(item) => item}
+          contentContainerStyle={{
+            paddingHorizontal: 12,
+            alignItems: "center",
+            gap: 8,
+          }}
+          renderItem={({ item }) => (
+            <Pressable
+              onPress={() => setFilter(item)}
               style={[
-                styles.categoryText,
-                filter === item && styles.categoryTextActive,
+                styles.categoryChip,
+                filter === item && styles.categoryChipActive,
               ]}
-              numberOfLines={1}
             >
-              {item[0].toUpperCase() + item.slice(1)}
-            </Text>
-          </Pressable>
-        )}
-      />
-    </View>
-
-      {/* Transactions */}
-      <FlatList
-        data={filteredTx}
-        keyExtractor={(item) => item.id.toString()}
-        ListEmptyComponent={
-          <Text style={{ textAlign: "center", marginTop: 40, color: "#64748b" }}>
-            No records found in this category
-          </Text>
-        }
-        renderItem={({ item }) => (
-          <View
-            style={[
-              styles.transactionCard,
-              item.type === "income"
-                ? styles.cardIncome
-                : item.type === "expense"
-                ? styles.cardExpense
-                : styles.cardLoan,
-            ]}
-          >
-            <View>
-              <Text style={styles.txTitle}>{item.title}</Text>
-              <Text style={styles.txMeta}>
-                {item.category} · {item.type}
-              </Text>
-            </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <Text
                 style={[
-                  styles.txAmount,
-                  item.type === "expense" || item.type === "loan"
-                    ? { color: "#dc2626" }
-                    : { color: "#16a34a" },
+                  styles.categoryText,
+                  filter === item && styles.categoryTextActive,
                 ]}
               >
-                {item.type === "expense" || item.type === "loan" ? "- " : "+ "}
-                ₹{item.amount}
+                {item[0].toUpperCase() + item.slice(1)}
               </Text>
-              <Pressable onPress={() => (setEditTx(item), setModalVisible(true))}>
-                <Ionicons name="create-outline" size={20} color="#475569" />
+            </Pressable>
+          )}
+        />
+      </View>
+
+      {/* Transactions */}
+      {transactions.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="wallet-outline" size={36} color="#64748b" />
+          <Text style={styles.emptyText}>No transactions yet</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredTransactions}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderTransaction}
+          contentContainerStyle={{ paddingBottom: 60 }}
+        />
+      )}
+
+      {/* Add/Edit Modal */}
+      <Modal visible={modalVisible} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={styles.modalCard}
+          >
+            <Text style={styles.modalTitle}>
+              {editId ? "Edit Transaction" : "Add Transaction"}
+            </Text>
+
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Title"
+              placeholderTextColor="#94a3b8"
+              style={styles.input}
+            />
+            <TextInput
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="Amount"
+              keyboardType="numeric"
+              placeholderTextColor="#94a3b8"
+              style={styles.input}
+            />
+
+            {/* Category Chips */}
+            <View style={styles.modalRow}>
+              <Text style={styles.label}>Category:</Text>
+              <FlatList
+                horizontal
+                data={CATEGORIES}
+                keyExtractor={(item) => item}
+                renderItem={({ item }) => (
+                  <Pressable
+                    onPress={() => setCategory(item)}
+                    style={[
+                      styles.chipSmall,
+                      category === item && styles.chipSmallActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipSmallText,
+                        category === item && styles.chipSmallTextActive,
+                      ]}
+                    >
+                      {item}
+                    </Text>
+                  </Pressable>
+                )}
+              />
+            </View>
+
+            {/* Type Selection */}
+            <View style={styles.modalRow}>
+              <Text style={styles.label}>Type:</Text>
+              {["income", "expense", "loan"].map((t) => (
+                <Pressable
+                  key={t}
+                  onPress={() => setType(t)}
+                  style={[
+                    styles.chipSmall,
+                    type === t && styles.chipSmallActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipSmallText,
+                      type === t && styles.chipSmallTextActive,
+                    ]}
+                  >
+                    {t}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Actions */}
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.pillBtn, styles.btnGhost]}
+                onPress={() => setModalVisible(false)}
+              >
+                <Text style={[styles.pillBtnText, styles.btnGhostText]}>
+                  Cancel
+                </Text>
               </Pressable>
               <Pressable
-                onPress={() =>
-                  Alert.alert(
-                    "Delete Transaction",
-                    "Are you sure you want to delete this transaction?",
-                    [
-                      { text: "Cancel", style: "cancel" },
-                      {
-                        text: "Yes, Delete",
-                        style: "destructive",
-                        onPress: () => handleDelete(item.id),
-                      },
-                    ],
-                    { cancelable: true }
-                  )
-                }
+                style={[styles.pillBtn, styles.btnPrimary]}
+                onPress={handleSave}
               >
-                <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                <Text style={styles.pillBtnText}>Save</Text>
               </Pressable>
-
             </View>
-          </View>
-        )}
-      />
-
-      <TransactionModal
-        visible={modalVisible}
-        onClose={() => {
-          setModalVisible(false);
-          setEditTx(null);
-        }}
-        onSubmit={handleAddOrEdit}
-        editTx={editTx}
-      />
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-/* ----------------------------- Modal ----------------------------- */
-
-const TransactionModal = ({
-  visible,
-  onClose,
-  onSubmit,
-  editTx,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  onSubmit: (tx: Omit<Transaction, "id" | "date">) => void;
-  editTx: Transaction | null;
-}) => {
-  const [title, setTitle] = useState(editTx?.title || "");
-  const [amount, setAmount] = useState(
-    editTx?.amount != null ? String(editTx.amount) : ""
-  );
-  const [type, setType] = useState<Transaction["type"]>(editTx?.type || "expense");
-  const [category, setCategory] = useState(editTx?.category || "others");
-
-  // Reset fields when opening for "Add"
-  useEffect(() => {
-    if (!visible) return;
-    if (!editTx) {
-      setTitle("");
-      setAmount("");
-      setType("expense");
-      setCategory("others");
-    }
-  }, [visible, editTx]);
-
-  const handleSave = () => {
-    const amt = parseFloat(amount);
-    if (!title.trim() || isNaN(amt))
-      return Alert.alert("Invalid", "Please enter valid title and amount");
-    onSubmit({ title: title.trim(), amount: amt, type, category });
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide" transparent>
-      <View style={styles.modalBackdrop}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalCard}
-        >
-          <Text style={styles.modalTitle}>
-            {editTx ? "Edit Transaction" : "Add Transaction"}
-          </Text>
-
-          <TextInput
-            value={title}
-            onChangeText={setTitle}
-            placeholder="Title (e.g. Bus fare)"
-            style={styles.input}
-          />
-          <TextInput
-            value={amount}
-            onChangeText={setAmount}
-            keyboardType="numeric"
-            placeholder="Amount"
-            style={styles.input}
-          />
-
-          {/* Type selector (compact) */}
-          <View style={{ flexDirection: "row", marginTop: 10, gap: 6}}>
-            {["income", "expense", "loan"].map((t) => (
-              <Pressable
-                key={t}
-                style={[styles.typeChip, type === t && styles.typeChipActive]}
-                onPress={() => setType(t as any)}
-              >
-                <Text
-                  style={[
-                    styles.typeText,
-                    type === t && styles.typeTextActive,
-                  ]}
-                >
-                  {t}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {/* Category selector (compact chips) */}
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginVertical: 20 }}>
-            {CATEGORIES.map((cat) => (
-              <Pressable
-                key={cat}
-                style={[
-                  styles.categoryChip,
-                  category === cat && styles.categoryChipActive,
-                ]}
-                onPress={() => setCategory(cat)}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    category === cat && styles.categoryTextActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {cat}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <View style={styles.modalActions}>
-            <Pressable style={[styles.pillBtn, styles.btnGhost]} onPress={onClose}>
-              <Text style={[styles.pillBtnText, styles.btnGhostText]}>Cancel</Text>
-            </Pressable>
-            <Pressable style={[styles.pillBtn, styles.btnPrimary]} onPress={handleSave}>
-              <Text style={styles.pillBtnText}>Save</Text>
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
-};
-
-/* ----------------------------- Styles ----------------------------- */
-
-const CHIP_HEIGHT = 32; // hard cap to prevent tall chips
-
+/* ---------------------------------------------------------------------------
+   Styles — Compact, Clean & Modern
+   --------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f8fafc" },
-  headerBar: {
+  header: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   headerTitle: { fontSize: 20, fontWeight: "800", color: "#0f172a" },
 
-  summaryArea: { paddingVertical: 10 },
-  chartRow: { alignItems: "center", justifyContent: "center", paddingVertical: 10 },
-  emptySummary: { alignItems: "center", paddingVertical: 20 },
-  emptySummaryTitle: { fontSize: 16, fontWeight: "700", color: "#334155" },
-  emptySummarySub: { fontSize: 13, color: "#64748b" },
+  summaryArea: {
+    padding: 12,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    margin: 10,
+  },
+  balanceLabel: { color: "#475569", fontWeight: "600" },
+  balanceValue: { fontSize: 30, fontWeight: "800", marginVertical: 4 },
+  statsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  statCard: {
+    flex: 1,
+    marginHorizontal: 4,
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  statLabel: { fontSize: 13, color: "#334155", fontWeight: "600" },
+  statValue: { fontSize: 16, fontWeight: "700", marginTop: 2 },
 
-  // Compact chips (filter + modal selectors)
   categoryChip: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: CHIP_HEIGHT / 2,
-    paddingHorizontal: 12,
-    height: CHIP_HEIGHT,
-    alignSelf: "flex-start",
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    backgroundColor: "#e2e8f0",
+    alignItems: "center",
     justifyContent: "center",
   },
-  categoryChipActive: { backgroundColor: "#6366f1", borderColor: "#6366f1" },
-  categoryText: { color: "#334155", fontWeight: "600", lineHeight: 18 },
+  categoryChipActive: { backgroundColor: "#6366f1" },
+  categoryText: {
+    color: "#334155",
+    fontWeight: "600",
+    fontSize: 13,
+    lineHeight: 16,
+  },
   categoryTextActive: { color: "#fff" },
-
-  typeChip: {
-    borderWidth: 1,
-    borderColor: "#cbd5e1",
-    borderRadius: CHIP_HEIGHT / 2,
-    paddingHorizontal: 12,
-    height: CHIP_HEIGHT,
-    alignSelf: "flex-start",
-    justifyContent: "center",
-  },
-  typeChipActive: { backgroundColor: "#6366f1", borderColor: "#6366f1" },
-  typeText: { color: "#334155", fontWeight: "600", lineHeight: 18 },
-  typeTextActive: { color: "#fff" },
 
   transactionCard: {
     backgroundColor: "#fff",
-    marginHorizontal: 12,
+    marginHorizontal: 10,
     marginVertical: 6,
-    borderRadius: 12,
     padding: 14,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
-    elevation: 2,
   },
-  cardIncome: { borderLeftWidth: 4, borderLeftColor: "#16a34a" },
-  cardExpense: { borderLeftWidth: 4, borderLeftColor: "#dc2626" },
-  cardLoan: { borderLeftWidth: 4, borderLeftColor: "#f59e0b" },
-  txTitle: { fontSize: 15, fontWeight: "700", color: "#0f172a" },
-  txMeta: { fontSize: 12, color: "#64748b", marginTop: 2 },
-  txAmount: { fontSize: 16, fontWeight: "700" },
+  transactionTitle: { fontSize: 16, fontWeight: "700", color: "#0f172a" },
+  transactionMeta: { color: "#64748b", fontSize: 13, marginTop: 2 },
+  transactionAmount: { fontSize: 16, fontWeight: "800" },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 30,
+  },
+  emptyText: { color: "#64748b", marginTop: 8 },
 
   modalBackdrop: {
     flex: 1,
@@ -491,17 +523,34 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
-  modalCard: { backgroundColor: "#fff", borderRadius: 16, padding: 16 },
+  modalCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 16,
+  },
   modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 10 },
   input: {
     borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 10,
     padding: 10,
-    fontSize: 15,
+    marginBottom: 10,
     backgroundColor: "#f8fafc",
-    marginVertical: 4,
   },
+  modalRow: { flexDirection: "row", alignItems: "center", marginVertical: 6 },
+  label: { fontWeight: "700", marginRight: 6, color: "#334155" },
+  chipSmall: {
+    borderRadius: 14,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: "#e2e8f0",
+    marginHorizontal: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chipSmallActive: { backgroundColor: "#6366f1" },
+  chipSmallText: { color: "#334155", fontWeight: "600", fontSize: 13 },
+  chipSmallTextActive: { color: "#fff" },
 
   pillBtn: {
     flexDirection: "row",
@@ -509,61 +558,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 5,
-    marginVertical: 5,
-    alignItems: "center",
-    justifyContent: "center"
+    borderRadius: 999,
   },
   pillBtnText: { color: "#fff", fontWeight: "700" },
   btnPrimary: { backgroundColor: "#6366f1" },
   btnGhost: { backgroundColor: "#e2e8f0" },
   btnGhostText: { color: "#0f172a" },
-  categoryContainer: {
-    height: 42,                // <- fixed height keeps FlatList from expanding
-    alignSelf: "flex-start",   // ensures no flex stretching
-  },
-  balanceCard: {
-  alignItems: "center",
-  marginBottom: 10,
-  paddingVertical: 6,
-},
-balanceLabel: {
-  fontSize: 14,
-  color: "#64748b",
-  fontWeight: "600",
-},
-balanceValue: {
-  fontSize: 32,
-  fontWeight: "800",
-  marginTop: 2,
-},
-statsRow: {
-  flexDirection: "row",
-  justifyContent: "space-evenly",
-  alignItems: "center",
-  marginTop: 4,
-  paddingHorizontal: 8,
-},
-statCard: {
-  flex: 1,
-  marginHorizontal: 4,
-  borderRadius: 12,
-  paddingVertical: 10,
-  alignItems: "center",
-  elevation: 2,
-  shadowColor: "#000",
-  shadowOpacity: 0.05,
-  shadowRadius: 4,
-},
-statLabel: {
-  fontSize: 13,
-  color: "#334155",
-  fontWeight: "600",
-},
-statValue: {
-  fontSize: 16,
-  fontWeight: "700",
-  marginTop: 2,
-},
-
 });

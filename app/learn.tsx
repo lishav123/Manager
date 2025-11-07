@@ -1,45 +1,23 @@
 /**
  * ---------------------------------------------------------------------------
- * LearnPage — Task Planner & Progress Tracker
+ * LearnPage — Task Planner & Progress Tracker (with AsyncStorage)
  * ---------------------------------------------------------------------------
  *
  * PURPOSE:
  *   A React Native screen that lets users create "Sections" (projects) and
  *   manage "Tasks" within them. Displays progress visually using charts.
- *
- * KEY FEATURES:
- *   - Dynamic section creation & deletion
- *   - Add, complete, and remove tasks
- *   - Smooth expand/collapse animation for task lists
- *   - Summary dashboard (pie charts per section)
- *   - Fully documented, developer-friendly architecture
- *
- * TECHNOLOGIES:
- *   React Native + Expo + react-native-gifted-charts + expo-linear-gradient
+ *   Now fully persistent with AsyncStorage.
  *
  * ---------------------------------------------------------------------------
- * STATE STRUCTURE OVERVIEW:
+ * DATA STRUCTURE IN ASYNCSTORAGE:
  * ---------------------------------------------------------------------------
- *  data = [
- *    {
- *      id: number,              // section ID
- *      name: string,            // section name
- *      data: [                  // tasks in this section
- *        { id: number, task: string, isdone: boolean }
- *      ]
- *    }
- *  ]
+ * {
+ *   skills: [ { id, name, data: [{ id, task, isdone }] } ],
+ *   money: [],
+ *   streak: [],
+ *   journal: []
+ * }
  *
- * ---------------------------------------------------------------------------
- * COMPONENT OVERVIEW:
- * ---------------------------------------------------------------------------
- *  - LearnPage          → main container; holds all state
- *  - SummaryCard        → small chart card showing section progress
- *  - SectionCard        → renders section header + tasks
- *  - TaskCard           → individual task row (toggle / delete)
- *  - AnimatedTaskList   → animated expand/collapse for tasks
- *  - SectionModal       → modal for creating new sections
- *  - TaskModal          → modal for adding a new task
  * ---------------------------------------------------------------------------
  */
 
@@ -58,28 +36,23 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { PieChart } from "react-native-gifted-charts";
 
 /* ---------------------------------------------------------------------------
-   Utility functions — small helpers used across components
+   Utility helpers
    --------------------------------------------------------------------------- */
-
-// Generates the next incremental ID for any array
 const nextId = (arr) => (arr.length ? Math.max(...arr.map((x) => x.id)) + 1 : 0);
-
-// Counts how many tasks in a section are marked as completed
 const countCompleted = (tasks) =>
   tasks.reduce((acc, t) => acc + (t.isdone ? 1 : 0), 0);
 
 /* ---------------------------------------------------------------------------
-   TaskCard — Displays one individual task with “Done” and “Delete” buttons
+   TaskCard
    --------------------------------------------------------------------------- */
-
 const TaskCard = ({ task, sectionId, setData }) => {
-  // Toggle a task’s completion state (immutable update)
   const toggleTask = () => {
     setData((prev) =>
       prev.map((section) =>
@@ -95,15 +68,25 @@ const TaskCard = ({ task, sectionId, setData }) => {
     );
   };
 
-  // Delete a task from its parent section
   const deleteTask = () => {
-    setData((prev) =>
-      prev.map((section) =>
-        section.id === sectionId
-          ? { ...section, data: section.data.filter((t) => t.id !== task.id) }
-          : section
-      )
-    );
+    Alert.alert("Delete Task", `Delete "${task.task}"?`, [
+      { text: "Cancel" },
+      {
+        text: "Yes, Delete",
+        style: "destructive",
+        onPress: () =>
+          setData((prev) =>
+            prev.map((section) =>
+              section.id === sectionId
+                ? {
+                    ...section,
+                    data: section.data.filter((t) => t.id !== task.id),
+                  }
+                : section
+            )
+          ),
+      },
+    ]);
   };
 
   return (
@@ -118,7 +101,6 @@ const TaskCard = ({ task, sectionId, setData }) => {
       </Text>
 
       <View style={styles.taskActions}>
-        {/* Done / Undone toggle */}
         <Pressable
           style={[
             styles.pillBtn,
@@ -131,7 +113,6 @@ const TaskCard = ({ task, sectionId, setData }) => {
           </Text>
         </Pressable>
 
-        {/* Delete button */}
         <Pressable
           style={[styles.pillBtn, styles.btnDanger]}
           onPress={deleteTask}
@@ -144,14 +125,12 @@ const TaskCard = ({ task, sectionId, setData }) => {
 };
 
 /* ---------------------------------------------------------------------------
-   AnimatedTaskList — Collapsible FlatList of tasks with animation
+   AnimatedTaskList
    --------------------------------------------------------------------------- */
-
 const AnimatedTaskList = ({ data, sectionId, setData, visible }) => {
   const anim = useRef(new Animated.Value(0)).current;
   const rowHeight = 64;
 
-  // Animate expansion and collapse
   useEffect(() => {
     Animated.timing(anim, {
       toValue: visible ? 1 : 0,
@@ -186,9 +165,8 @@ const AnimatedTaskList = ({ data, sectionId, setData, visible }) => {
 };
 
 /* ---------------------------------------------------------------------------
-   SummaryCard — Small chart card showing section progress in summary view
+   SummaryCard
    --------------------------------------------------------------------------- */
-
 const SummaryCard = ({ section }) => {
   const completed = countCompleted(section.data);
   const total = section.data.length || 1;
@@ -226,9 +204,8 @@ const SummaryCard = ({ section }) => {
 };
 
 /* ---------------------------------------------------------------------------
-   SectionCard — Main block for each section
+   SectionCard
    --------------------------------------------------------------------------- */
-
 const SectionCard = ({ section, setData, openTaskModal }) => {
   const [visible, setVisible] = useState(false);
   const completed = countCompleted(section.data);
@@ -238,7 +215,7 @@ const SectionCard = ({ section, setData, openTaskModal }) => {
     Alert.alert("Delete Section", `Delete "${section.name}"?`, [
       { text: "Cancel" },
       {
-        text: "OK",
+        text: "Yes, Delete",
         style: "destructive",
         onPress: () =>
           setData((prev) => prev.filter((s) => s.id !== section.id)),
@@ -248,11 +225,7 @@ const SectionCard = ({ section, setData, openTaskModal }) => {
 
   return (
     <View style={styles.sectionContainer}>
-      {/* Section header */}
-      <LinearGradient
-        colors={["#ffffff", "#f8fafc"]}
-        style={styles.sectionHeader}
-      >
+      <LinearGradient colors={["#ffffff", "#f8fafc"]} style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
           <Pressable onPress={() => setVisible((v) => !v)} hitSlop={8}>
             <Ionicons
@@ -269,10 +242,7 @@ const SectionCard = ({ section, setData, openTaskModal }) => {
         </View>
 
         <View style={styles.headerActions}>
-          <Pressable
-            style={[styles.iconBtn]}
-            onPress={() => openTaskModal(section.id)}
-          >
+          <Pressable style={[styles.iconBtn]} onPress={() => openTaskModal(section.id)}>
             <Ionicons name="add" size={18} color="#fff" />
             <Text style={styles.iconBtnText}>Task</Text>
           </Pressable>
@@ -299,9 +269,8 @@ const SectionCard = ({ section, setData, openTaskModal }) => {
 };
 
 /* ---------------------------------------------------------------------------
-   SectionModal — For adding new sections
+   SectionModal
    --------------------------------------------------------------------------- */
-
 const SectionModal = ({ visible, onClose, onSubmit }) => {
   const [name, setName] = useState("");
 
@@ -312,6 +281,7 @@ const SectionModal = ({ visible, onClose, onSubmit }) => {
     if (trimmed.length > 12)
       return Alert.alert("Too long", "Max 12 characters allowed.");
     onSubmit(trimmed);
+    setName("");
   };
 
   return (
@@ -344,15 +314,15 @@ const SectionModal = ({ visible, onClose, onSubmit }) => {
 };
 
 /* ---------------------------------------------------------------------------
-   TaskModal — For adding tasks inside a section
+   TaskModal
    --------------------------------------------------------------------------- */
-
 const TaskModal = ({ visible, onClose, onSubmit, sectionName }) => {
   const [task, setTask] = useState("");
 
   const handleSubmit = () => {
     if (!task.trim()) return;
     onSubmit(task.trim());
+    setTask("");
   };
 
   return (
@@ -385,27 +355,62 @@ const TaskModal = ({ visible, onClose, onSubmit, sectionName }) => {
 };
 
 /* ---------------------------------------------------------------------------
-   LearnPage — Main container holding everything
+   MAIN: LearnPage (with AsyncStorage)
    --------------------------------------------------------------------------- */
-
 export default function LearnPage() {
-  const [data, setData] = useState([]); // main state: sections + tasks
+  const [data, setData] = useState([]);
   const [sectionModalVisible, setSectionModalVisible] = useState(false);
   const [taskModalVisible, setTaskModalVisible] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState(null);
+
+  const STORAGE_KEY = "@myAppData";
 
   const activeSectionName = useMemo(
     () => data.find((s) => s.id === activeSectionId)?.name,
     [activeSectionId, data]
   );
 
-  // Create a new section
+  // Load saved data
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const existing = await AsyncStorage.getItem(STORAGE_KEY);
+        if (existing) {
+          const parsed = JSON.parse(existing);
+          const learnData = parsed.skills || [];
+          setData(learnData);
+        } else {
+          const initial = { skills: [], money: [], streak: [], journal: [] };
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+        }
+      } catch (err) {
+        console.error("Load error:", err);
+      }
+    };
+    loadData();
+  }, []);
+
+  // Save data on every change
+  useEffect(() => {
+    const saveData = async () => {
+      try {
+        const existing = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsed = existing ? JSON.parse(existing) : {};
+        const updated = { ...parsed, skills: data };
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.error("Save error:", err);
+      }
+    };
+    saveData();
+  }, [data]);
+
+  // CRUD Handlers
   const handleCreateSection = (name) => {
     setData((prev) => [...prev, { id: nextId(prev), name, data: [] }]);
     setSectionModalVisible(false);
   };
 
-  // Add a new task to current section
   const handleAddTask = (title) => {
     setData((prev) =>
       prev.map((s) =>
@@ -424,7 +429,6 @@ export default function LearnPage() {
 
   return (
     <SafeAreaView style={styles.root}>
-      {/* HEADER BAR */}
       <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.headerBar}>
         <Text style={styles.headerTitle}>Your Planner</Text>
         <Pressable
@@ -436,7 +440,6 @@ export default function LearnPage() {
         </Pressable>
       </LinearGradient>
 
-      {/* SUMMARY DASHBOARD */}
       <View style={styles.summaryArea}>
         {data.length === 0 ? (
           <View style={styles.emptySummary}>
@@ -462,7 +465,6 @@ export default function LearnPage() {
         )}
       </View>
 
-      {/* SECTION LIST */}
       <FlatList
         data={data}
         keyExtractor={(item) => item.id.toString()}
@@ -481,7 +483,6 @@ export default function LearnPage() {
         }
       />
 
-      {/* MODALS */}
       <SectionModal
         visible={sectionModalVisible}
         onClose={() => setSectionModalVisible(false)}
@@ -498,7 +499,7 @@ export default function LearnPage() {
 }
 
 /* ---------------------------------------------------------------------------
-   Styles — Clean, light modern look with rounded corners & teal/indigo hues
+   Styles — Clean, modern, consistent UI
    --------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f8fafc" },
@@ -510,8 +511,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   headerTitle: { fontSize: 20, fontWeight: "800", color: "#0f172a" },
-
-  /* SUMMARY SECTION */
   summaryArea: { paddingTop: 10, paddingBottom: 6 },
   summaryCard: {
     width: 160,
@@ -526,12 +525,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#0f172a",
-    textAlign: "center",
-  },
+  summaryTitle: { fontSize: 16, fontWeight: "700", color: "#0f172a", textAlign: "center" },
   summarySubtitle: { fontSize: 13, color: "#475569", textAlign: "center" },
   emptySummary: {
     backgroundColor: "#ffffff",
@@ -550,8 +544,6 @@ const styles = StyleSheet.create({
     color: "#334155",
   },
   emptySummarySub: { marginTop: 4, fontSize: 13, color: "#64748b" },
-
-  /* SECTION + TASKS */
   sectionContainer: {
     backgroundColor: "#ffffff",
     marginHorizontal: 12,
@@ -574,8 +566,6 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   sectionMetaRow: { paddingHorizontal: 14, paddingTop: 8 },
   metaText: { fontSize: 12, color: "#64748b" },
-
-  /* TASKS */
   taskCard: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -591,8 +581,6 @@ const styles = StyleSheet.create({
   taskText: { fontSize: 15, fontWeight: "600" },
   strike: { textDecorationLine: "line-through", color: "#64748b" },
   taskActions: { flexDirection: "row" },
-
-  /* BUTTONS */
   pillBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -616,8 +604,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   iconBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
-
-  /* MODALS */
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(2,6,23,0.35)",
@@ -639,9 +625,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#f8fafc",
     fontSize: 15,
   },
-  modalActions: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginTop: 12,
-  },
+  modalActions: { flexDirection: "row", justifyContent: "flex-end", marginTop: 12 },
 });

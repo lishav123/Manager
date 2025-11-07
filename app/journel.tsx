@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,30 +15,82 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Calendar } from "react-native-calendars";
 import Ionicons from "@expo/vector-icons/Ionicons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+/* ---------------------------------------------------------------------------
+   Type Definition
+--------------------------------------------------------------------------- */
 type JournalEntry = {
   date: string;
   title: string;
   text: string;
 };
 
+const STORAGE_KEY = "@myAppData";
+
+/* ---------------------------------------------------------------------------
+   JournalPage Component
+--------------------------------------------------------------------------- */
 export default function JournalPage() {
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
   const [journals, setJournals] = useState<JournalEntry[]>([]);
   const [writeModalVisible, setWriteModalVisible] = useState(false);
   const [viewModalVisible, setViewModalVisible] = useState(false);
-
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
 
   const MAX_CHARS = 1500;
 
+  /* -------------------------------------------------------------------------
+     Load journals from AsyncStorage
+  ------------------------------------------------------------------------- */
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const data = await AsyncStorage.getItem(STORAGE_KEY);
+        if (data) {
+          const parsed = JSON.parse(data);
+          setJournals(parsed.journal || []);
+        } else {
+          const initial = { skills: [], money: [], streak: [], journal: [] };
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+        }
+      } catch (err) {
+        console.error("Error loading journals:", err);
+      }
+    };
+    loadData();
+  }, []);
+
+  /* -------------------------------------------------------------------------
+     Save journals whenever changed
+  ------------------------------------------------------------------------- */
+  useEffect(() => {
+    const saveData = async () => {
+      try {
+        const existing = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsed = existing ? JSON.parse(existing) : {};
+        const updated = { ...parsed, journal: journals };
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (err) {
+        console.error("Error saving journals:", err);
+      }
+    };
+    saveData();
+  }, [journals]);
+
+  /* -------------------------------------------------------------------------
+     Derived current entry
+  ------------------------------------------------------------------------- */
   const currentEntry = useMemo(
     () => journals.find((j) => j.date === selectedDate),
     [journals, selectedDate]
   );
 
+  /* -------------------------------------------------------------------------
+     CRUD operations
+  ------------------------------------------------------------------------- */
   const handleSave = () => {
     const trimmedTitle = title.trim();
     const trimmedText = text.trim();
@@ -64,26 +116,22 @@ export default function JournalPage() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      "Delete Journal",
-      "Are you sure you want to delete this entry?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Yes, Delete",
-          style: "destructive",
-          onPress: () => {
-            setJournals((prev) =>
-              prev.filter((j) => j.date !== selectedDate)
-            );
-            setViewModalVisible(false);
-          },
+    Alert.alert("Delete Journal", "Are you sure you want to delete this entry?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes, Delete",
+        style: "destructive",
+        onPress: () => {
+          setJournals((prev) => prev.filter((j) => j.date !== selectedDate));
+          setViewModalVisible(false);
         },
-      ],
-      { cancelable: true }
-    );
+      },
+    ]);
   };
 
+  /* -------------------------------------------------------------------------
+     UI
+  ------------------------------------------------------------------------- */
   return (
     <SafeAreaView style={styles.root}>
       {/* Header */}
@@ -187,7 +235,9 @@ export default function JournalPage() {
             maxLength={MAX_CHARS}
             textAlignVertical="top"
           />
-          <Text style={styles.charCount}>{text.length}/{MAX_CHARS}</Text>
+          <Text style={styles.charCount}>
+            {text.length}/{MAX_CHARS}
+          </Text>
         </SafeAreaView>
       </Modal>
 
@@ -321,7 +371,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#0f172a",
     lineHeight: 24,
-    marginBottom: 50
+    marginBottom: 50,
   },
 
   pillBtn: {

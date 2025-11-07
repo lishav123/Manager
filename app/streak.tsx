@@ -13,7 +13,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import Ionicons from "@expo/vector-icons/Ionicons";
 import { PieChart } from "react-native-gifted-charts";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
+/* ---------------------------------------------------------------------------
+   Type Definitions
+--------------------------------------------------------------------------- */
 type Streak = {
   id: number;
   title: string;
@@ -22,6 +26,11 @@ type Streak = {
   count: number;
 };
 
+const STORAGE_KEY = "@myAppData";
+
+/* ---------------------------------------------------------------------------
+   StreakPage Component
+--------------------------------------------------------------------------- */
 export default function StreakPage() {
   const [streaks, setStreaks] = useState<Streak[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -30,8 +39,51 @@ export default function StreakPage() {
 
   const now = new Date();
 
-  // Auto-increment streaks that have crossed 24h
+  /* -------------------------------------------------------------------------
+     Load from AsyncStorage
+  ------------------------------------------------------------------------- */
   useEffect(() => {
+    const loadData = async () => {
+      try {
+        const data = await AsyncStorage.getItem(STORAGE_KEY);
+        if (data) {
+          const parsed = JSON.parse(data);
+          setStreaks(parsed.streak || []);
+        } else {
+          // Initialize structure if missing
+          const initial = { skills: [], money: [], streak: [], journal: [] };
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+        }
+      } catch (error) {
+        console.error("Error loading streaks:", error);
+      }
+    };
+    loadData();
+  }, []);
+
+  /* -------------------------------------------------------------------------
+     Save to AsyncStorage on change
+  ------------------------------------------------------------------------- */
+  useEffect(() => {
+    const saveData = async () => {
+      try {
+        const existing = await AsyncStorage.getItem(STORAGE_KEY);
+        const parsed = existing ? JSON.parse(existing) : {};
+        const updated = { ...parsed, streak: streaks };
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (error) {
+        console.error("Error saving streaks:", error);
+      }
+    };
+    saveData();
+  }, [streaks]);
+
+  /* -------------------------------------------------------------------------
+     Auto-increment streaks (if 24h passed)
+  ------------------------------------------------------------------------- */
+  useEffect(() => {
+    if (streaks.length === 0) return;
+
     setStreaks((prev) =>
       prev.map((s) => {
         const diff =
@@ -44,7 +96,9 @@ export default function StreakPage() {
     );
   }, []);
 
-  // Add or update streak
+  /* -------------------------------------------------------------------------
+     CRUD Handlers
+  ------------------------------------------------------------------------- */
   const handleSave = () => {
     if (!title.trim()) return Alert.alert("Empty", "Please enter a task name.");
 
@@ -70,46 +124,43 @@ export default function StreakPage() {
     setTitle("");
   };
 
-  // Reset streak
   const handleReset = (id: number) => {
-    Alert.alert(
-      "Reset Streak",
-      "Are you sure you want to reset this streak to 0?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Yes, Reset",
-          style: "destructive",
-          onPress: () =>
-            setStreaks((prev) =>
-              prev.map((s) =>
-                s.id === id
-                  ? { ...s, count: 0, startDate: now.toISOString(), lastIncrement: now.toISOString() }
-                  : s
-              )
-            ),
-        },
-      ]
-    );
+    Alert.alert("Reset Streak", "Reset this streak to day 0?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes, Reset",
+        style: "destructive",
+        onPress: () =>
+          setStreaks((prev) =>
+            prev.map((s) =>
+              s.id === id
+                ? {
+                    ...s,
+                    count: 0,
+                    startDate: now.toISOString(),
+                    lastIncrement: now.toISOString(),
+                  }
+                : s
+            )
+          ),
+      },
+    ]);
   };
 
-  // Delete streak
   const handleDelete = (id: number) => {
-    Alert.alert(
-      "Delete Streak",
-      "Are you sure you want to delete this streak?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Yes, Delete",
-          style: "destructive",
-          onPress: () => setStreaks((prev) => prev.filter((s) => s.id !== id)),
-        },
-      ]
-    );
+    Alert.alert("Delete Streak", "Are you sure you want to delete this streak?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes, Delete",
+        style: "destructive",
+        onPress: () => setStreaks((prev) => prev.filter((s) => s.id !== id)),
+      },
+    ]);
   };
 
-  // Calculate time remaining for next streak increment
+  /* -------------------------------------------------------------------------
+     Utility: Time until next increment
+  ------------------------------------------------------------------------- */
   const timeUntilNext = (s: Streak) => {
     const last = new Date(s.lastIncrement);
     const next = new Date(last.getTime() + 24 * 60 * 60 * 1000);
@@ -118,6 +169,9 @@ export default function StreakPage() {
     return diffHours;
   };
 
+  /* -------------------------------------------------------------------------
+     Render Function
+  ------------------------------------------------------------------------- */
   const renderStreak = ({ item }: { item: Streak }) => {
     const hoursLeft = timeUntilNext(item);
     const percent = ((24 - hoursLeft) / 24) * 100;
@@ -126,7 +180,10 @@ export default function StreakPage() {
       <View style={styles.streakCard}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
           <PieChart
-            data={[{ value: percent, color: "#6366f1" }, { value: 100 - percent, color: "#e5e7eb" }]}
+            data={[
+              { value: percent, color: "#6366f1" },
+              { value: 100 - percent, color: "#e5e7eb" },
+            ]}
             radius={30}
             donut
             innerRadius={22}
@@ -143,11 +200,13 @@ export default function StreakPage() {
         </View>
 
         <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-          <Pressable onPress={() => {
-            setEditItem(item);
-            setTitle(item.title);
-            setModalVisible(true);
-          }}>
+          <Pressable
+            onPress={() => {
+              setEditItem(item);
+              setTitle(item.title);
+              setModalVisible(true);
+            }}
+          >
             <Ionicons name="create-outline" size={20} color="#6366f1" />
           </Pressable>
 
@@ -163,6 +222,9 @@ export default function StreakPage() {
     );
   };
 
+  /* -------------------------------------------------------------------------
+     UI
+  ------------------------------------------------------------------------- */
   return (
     <SafeAreaView style={styles.root}>
       <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.header}>
@@ -183,7 +245,9 @@ export default function StreakPage() {
       {streaks.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="flame-outline" size={36} color="#64748b" />
-          <Text style={styles.emptyText}>No streaks yet. Add one to get started!</Text>
+          <Text style={styles.emptyText}>
+            No streaks yet. Add one to get started!
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -231,8 +295,9 @@ export default function StreakPage() {
   );
 }
 
-/* ----------------------------- Styles ----------------------------- */
-
+/* ---------------------------------------------------------------------------
+   Styles
+--------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f8fafc" },
   header: {
@@ -271,11 +336,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
-  modalCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-  },
+  modalCard: { backgroundColor: "#fff", borderRadius: 16, padding: 16 },
   modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 10 },
   input: {
     borderWidth: 1,
