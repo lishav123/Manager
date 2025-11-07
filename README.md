@@ -1,50 +1,150 @@
-# Welcome to your Expo app 👋
+# 🌿 Meet `Manager` : A personal Productivity Tracker App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A beautifully designed **React Native (Expo)** app that unifies your **Learning Progress**, **Finance Tracking**, **Daily Streaks**, and **Journal Entries** into a single dashboard — built with Expo Tabs layout.
 
-## Get started
+> _A personal productivity companion that blends focus, finance, and reflection._
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## 🧭 Overview
 
-2. Start the app
+This app helps you manage every part of your self-improvement journey — from what you’re learning, how you’re managing your money, keeping up your daily habits, to writing down your reflections.  
+All data is **stored locally using AsyncStorage**, ensuring smooth offline use and fast performance.
 
-   ```bash
-   npx expo start
-   ```
+---
 
-In the output, you'll find options to open the app in a
+## ⚙️ Tech Stack
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+| Category | Tools |
+|-----------|-------|
+| Framework | [React Native](https://reactnative.dev/) + [Expo](https://expo.dev/) |
+| Navigation | `expo-router` (Tabs via `_layout.tsx`) |
+| State & Storage | `React Hooks`, `@react-native-async-storage/async-storage` |
+| Charts & UI | `react-native-gifted-charts`, `expo-linear-gradient`, `Ionicons` |
+| Styling | Custom modern UI using `StyleSheet` and gradients |
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+---
 
-## Get a fresh project
+## 🧩 App Structure
 
-When you're ready, run:
-
-```bash
-npm run reset-project
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+/app
+├── _layout.tsx       → Tab navigation setup
+├── index.tsx         → Dashboard (summary of all modules)
+├── learn.tsx         → Learning planner (sections + tasks)
+├── money.tsx         → Finance tracker (income, expenses, balance)
+├── streak.tsx        → Streak tracker (habit consistency)
+├── journal.tsx       → Journal with calendar and editor
 
-## Learn more
+````
 
-To learn more about developing your project with Expo, look at the following resources:
+Each tab is fully persistent via AsyncStorage and updates the `index.tsx` dashboard dynamically when you navigate back.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+---
 
-## Join the community
+## 🚀 Features
 
-Join our community of developers creating universal apps.
+### 📘 Learning Planner
+- Create “Sections” for your learning projects  
+- Add, mark, or delete tasks  
+- Animated expand/collapse  
+- Summary pie chart showing completion progress  
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### 💰 Finance Tracker
+- Track income and expenses across categories  
+- Color-coded balance display (green, yellow, red)  
+- Quick add, edit, and delete  
+- Category chips and transaction summaries  
+
+### 🔥 Streak Tracker
+- Maintain your consistency for daily habits  
+- Automatically increments every 24 hours  
+- Reset, edit, or delete streaks  
+- Pie chart shows remaining hours before next increment  
+
+### 📓 Journal
+- Calendar to select dates  
+- Full-screen writing editor with title and word limit  
+- View, edit, or delete previous entries  
+- Private and local storage only  
+
+### 📊 Dashboard
+- Unified summary of all four modules  
+- Auto-refreshes via `useFocusEffect` when returning from tabs  
+- Pull-to-refresh support for manual reload  
+- Dynamic charts and stats across all sections  
+
+---
+
+## 🧠 Design Philosophy
+
+The UI design is intentionally clean and focused on clarity —  
+soft gradients, rounded cards, minimal distractions, and high readability.  
+
+Inspired by modern productivity tools like Notion and Reflect,  
+this app aims to **help users think clearly and track progress calmly**.
+
+---
+
+## 🧑‍💻 Contributors
+
+### 👨‍💻 **Aishwaray Tiwary (@lishav123 (owner))**
+- Concept, architecture, and full implementation  
+- Designed UI/UX and navigation structure using Expo Tabs  
+- Integrated AsyncStorage persistence  
+- Developed and documented all 4 app modules  
+
+### 🤖 **ChatGPT (OpenAI GPT-5)**
+- Guided architectural decisions and refactoring  
+- Helped design consistent UI/UX themes  
+- Provided in-depth documentation and best practices  
+- Assisted in debugging and performance optimization  
+
+> _Built through a collaboration of human creativity and AI engineering._
+
+---
+
+## 📸 Screenshots
+
+| Dashboard | Learn | Money | Journal | Streak | Journal continue |
+|------------|--------|--------|----------|----------|----------|
+| ![Dashboard](assets/screens/dashboard.png) | ![Learn](assets/screens/learn.png) | ![Money](assets/screens/money.png) | ![Journal](assets/screens/journal.png) | ![Streak](assets/screens/streak.png) | ![View](assets/screens/view.png)
+
+---
+
+## 💡 Setup & Run
+
+### 1️⃣ Install dependencies
+```bash
+npm install
+# or
+yarn install
+````
+
+### 2️⃣ Run the Expo project
+
+```bash
+npx expo start
+```
+
+Scan the QR code with the Expo Go app or run it in your Android/iOS emulator.
+
+---
+
+## 🧱 Future Improvements
+
+* 🔄 Cloud sync with Supabase or Firebase
+* 🧠 AI-generated learning plans and journal summaries
+* 🎨 Dark mode and custom themes
+* 📤 Data export and analytics
+
+---
+
+## ⚖️ License
+
+This project is released under the **MIT License** — feel free to use, modify, and contribute.
+
+---
+
+### 🌱 *“Discipline, reflection, and growth — all in your pocket.”*
