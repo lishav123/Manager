@@ -147,4 +147,9 @@ This project is released under the **MIT License** — feel free to use, modify,
 
 ---
 
+## News
+
+We can start the discussion to grow it according to your idea!
 ### 🌱 *“Discipline, reflection, and growth — all in your pocket.”*
+
+
