@@ -28,9 +28,6 @@ type Streak = {
 
 const STORAGE_KEY = "@myAppData";
 
-/* ---------------------------------------------------------------------------
-   StreakPage Component
---------------------------------------------------------------------------- */
 export default function StreakPage() {
   const [streaks, setStreaks] = useState<Streak[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
@@ -40,17 +37,17 @@ export default function StreakPage() {
   const now = new Date();
 
   /* -------------------------------------------------------------------------
-     Load from AsyncStorage
+     Load From AsyncStorage
   ------------------------------------------------------------------------- */
   useEffect(() => {
     const loadData = async () => {
       try {
         const data = await AsyncStorage.getItem(STORAGE_KEY);
+
         if (data) {
           const parsed = JSON.parse(data);
           setStreaks(parsed.streak || []);
         } else {
-          // Initialize structure if missing
           const initial = { skills: [], money: [], streak: [], journal: [] };
           await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
         }
@@ -58,11 +55,46 @@ export default function StreakPage() {
         console.error("Error loading streaks:", error);
       }
     };
+
     loadData();
   }, []);
 
   /* -------------------------------------------------------------------------
-     Save to AsyncStorage on change
+     Auto-Increment Streak Logic
+     Fixes: multi-day increments, correct lastIncrement updates
+  ------------------------------------------------------------------------- */
+  useEffect(() => {
+    if (streaks.length === 0) return;
+
+    const updated = streaks.map((s) => {
+      const last = new Date(s.lastIncrement);
+
+      const diffDays = Math.floor(
+        (now.getTime() - last.getTime()) / (1000 * 60 * 60 * 24)
+      );
+
+      if (diffDays > 0) {
+        const newLast = new Date(last);
+        newLast.setDate(newLast.getDate() + diffDays);
+
+        return {
+          ...s,
+          count: s.count + diffDays,
+          lastIncrement: newLast.toISOString(),
+        };
+      }
+
+      return s;
+    });
+
+    // Only update if something changed
+    if (JSON.stringify(updated) !== JSON.stringify(streaks)) {
+      setStreaks(updated);
+    }
+  }, [streaks.length]);
+
+  /* -------------------------------------------------------------------------
+     Save to AsyncStorage when streaks change
   ------------------------------------------------------------------------- */
   useEffect(() => {
     const saveData = async () => {
@@ -75,32 +107,15 @@ export default function StreakPage() {
         console.error("Error saving streaks:", error);
       }
     };
+
     saveData();
   }, [streaks]);
-
-  /* -------------------------------------------------------------------------
-     Auto-increment streaks (if 24h passed)
-  ------------------------------------------------------------------------- */
-  useEffect(() => {
-    if (streaks.length === 0) return;
-
-    setStreaks((prev) =>
-      prev.map((s) => {
-        const diff =
-          (now.getTime() - new Date(s.lastIncrement).getTime()) / (1000 * 60 * 60);
-        if (diff >= 24) {
-          return { ...s, count: s.count + 1, lastIncrement: now.toISOString() };
-        }
-        return s;
-      })
-    );
-  }, []);
 
   /* -------------------------------------------------------------------------
      CRUD Handlers
   ------------------------------------------------------------------------- */
   const handleSave = () => {
-    if (!title.trim()) return Alert.alert("Empty", "Please enter a task name.");
+    if (!title.trim()) return Alert.alert("Empty", "Please enter a name");
 
     if (editItem) {
       setStreaks((prev) =>
@@ -125,10 +140,10 @@ export default function StreakPage() {
   };
 
   const handleReset = (id: number) => {
-    Alert.alert("Reset Streak", "Reset this streak to day 0?", [
+    Alert.alert("Reset Streak", "Reset to Day 0?", [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Yes, Reset",
+        text: "Yes",
         style: "destructive",
         onPress: () =>
           setStreaks((prev) =>
@@ -148,10 +163,10 @@ export default function StreakPage() {
   };
 
   const handleDelete = (id: number) => {
-    Alert.alert("Delete Streak", "Are you sure you want to delete this streak?", [
+    Alert.alert("Delete Streak", "Are you sure?", [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Yes, Delete",
+        text: "Delete",
         style: "destructive",
         onPress: () => setStreaks((prev) => prev.filter((s) => s.id !== id)),
       },
@@ -159,18 +174,18 @@ export default function StreakPage() {
   };
 
   /* -------------------------------------------------------------------------
-     Utility: Time until next increment
+     Time Until Next Increment
   ------------------------------------------------------------------------- */
   const timeUntilNext = (s: Streak) => {
     const last = new Date(s.lastIncrement);
     const next = new Date(last.getTime() + 24 * 60 * 60 * 1000);
+
     const diffMs = Math.max(next.getTime() - now.getTime(), 0);
-    const diffHours = diffMs / (1000 * 60 * 60);
-    return diffHours;
+    return diffMs / (1000 * 60 * 60); // hours
   };
 
   /* -------------------------------------------------------------------------
-     Render Function
+     Render Individual Streak Card
   ------------------------------------------------------------------------- */
   const renderStreak = ({ item }: { item: Streak }) => {
     const hoursLeft = timeUntilNext(item);
@@ -193,6 +208,7 @@ export default function StreakPage() {
               </Text>
             )}
           />
+
           <View>
             <Text style={styles.streakTitle}>{item.title}</Text>
             <Text style={styles.streakCount}>🔥 Day {item.count}</Text>
@@ -229,6 +245,7 @@ export default function StreakPage() {
     <SafeAreaView style={styles.root}>
       <LinearGradient colors={["#f8fafc", "#eef2ff"]} style={styles.header}>
         <Text style={styles.headerTitle}>My Streaks</Text>
+
         <Pressable
           style={[styles.pillBtn, styles.btnPrimary]}
           onPress={() => {
@@ -245,9 +262,7 @@ export default function StreakPage() {
       {streaks.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="flame-outline" size={36} color="#64748b" />
-          <Text style={styles.emptyText}>
-            No streaks yet. Add one to get started!
-          </Text>
+          <Text style={styles.emptyText}>No streaks yet. Add one!</Text>
         </View>
       ) : (
         <FlatList
@@ -258,20 +273,22 @@ export default function StreakPage() {
         />
       )}
 
-      {/* Add/Edit Modal */}
+      {/* Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
               {editItem ? "Edit Streak" : "Add New Streak"}
             </Text>
+
             <TextInput
-              placeholder="Streak title (e.g. Workout, Coding...)"
+              placeholder="Streak title"
               value={title}
               onChangeText={setTitle}
               style={styles.input}
               maxLength={40}
             />
+
             <View style={styles.modalActions}>
               <Pressable
                 style={[styles.pillBtn, styles.btnGhost]}
@@ -281,6 +298,7 @@ export default function StreakPage() {
                   Cancel
                 </Text>
               </Pressable>
+
               <Pressable
                 style={[styles.pillBtn, styles.btnPrimary]}
                 onPress={handleSave}
@@ -300,6 +318,7 @@ export default function StreakPage() {
 --------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#f8fafc" },
+
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -307,15 +326,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
+
   headerTitle: { fontSize: 20, fontWeight: "800", color: "#0f172a" },
 
   emptyContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: 20,
   },
-  emptyText: { color: "#64748b", fontSize: 14, marginTop: 8 },
+  emptyText: { color: "#64748b", marginTop: 8 },
 
   streakCard: {
     backgroundColor: "#fff",
@@ -327,8 +346,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 2,
   },
+
   streakTitle: { fontSize: 16, fontWeight: "700", color: "#0f172a" },
-  streakCount: { fontSize: 13, color: "#475569", marginTop: 2 },
+  streakCount: { fontSize: 13, color: "#475569" },
 
   modalBackdrop: {
     flex: 1,
@@ -336,8 +356,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 20,
   },
+
   modalCard: { backgroundColor: "#fff", borderRadius: 16, padding: 16 },
+
   modalTitle: { fontSize: 18, fontWeight: "800", marginBottom: 10 },
+
   input: {
     borderWidth: 1,
     borderColor: "#e2e8f0",
@@ -345,11 +368,13 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: "#f8fafc",
   },
+
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
     marginTop: 12,
   },
+
   pillBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -358,6 +383,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
   },
+
   pillBtnText: { color: "#fff", fontWeight: "700" },
   btnPrimary: { backgroundColor: "#6366f1" },
   btnGhost: { backgroundColor: "#e2e8f0" },
